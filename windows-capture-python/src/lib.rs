@@ -125,6 +125,7 @@ pub struct NativeWindowsCapture {
     draw_border: DrawBorderSettings,
     monitor_index: Option<usize>,
     window_name: Option<String>,
+    hwnd: Option<isize>,
 }
 
 #[pymethods]
@@ -137,6 +138,7 @@ impl NativeWindowsCapture {
         draw_border: Option<bool>,
         mut monitor_index: Option<usize>,
         window_name: Option<String>,
+        hwnd: Option<isize>,
     ) -> PyResult<Self> {
         if window_name.is_some() && monitor_index.is_some() {
             return Err(PyException::new_err(
@@ -167,12 +169,44 @@ impl NativeWindowsCapture {
             draw_border,
             monitor_index,
             window_name,
+            hwnd,
         })
     }
 
     /// Start Capture
     pub fn start(&mut self) -> PyResult<()> {
-        if self.window_name.is_some() {
+        if self.hwnd.is_some() {
+            let window = Window::from_raw_hwnd(self.hwnd.unwrap());
+
+            let settings = Settings::new(
+                window,
+                self.cursor_capture.clone(),
+                self.draw_border.clone(),
+                ColorFormat::Bgra8,
+                (
+                    self.on_frame_arrived_callback.clone(),
+                    self.on_closed.clone(),
+                ),
+            );
+
+            match InnerNativeWindowsCapture::start(settings) {
+                Ok(()) => (),
+                Err(e) => {
+                    if let GraphicsCaptureApiError::FrameHandlerError(
+                        InnerNativeWindowsCaptureError::PythonError(ref e),
+                    ) = e
+                    {
+                        return Err(PyException::new_err(format!(
+                            "Capture Session Threw An Exception -> {e}",
+                        )));
+                    }
+
+                    return Err(PyException::new_err(format!(
+                        "Capture Session Threw An Exception -> {e}",
+                    )));
+                }
+            }
+        } else if self.window_name.is_some() {
             let window = match Window::from_contains_name(self.window_name.as_ref().unwrap()) {
                 Ok(window) => window,
                 Err(e) => {

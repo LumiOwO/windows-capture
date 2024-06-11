@@ -163,6 +163,7 @@ class WindowsCapture:
         draw_border: Optional[bool] = None,
         monitor_index: Optional[int] = None,
         window_name: Optional[str] = None,
+        hwnd: Optional[int] = None,
     ) -> None:
         """
         Constructs All The Necessary Attributes For The WindowsCapture Object
@@ -192,6 +193,7 @@ class WindowsCapture:
             draw_border,
             monitor_index,
             window_name,
+            hwnd,
         )
 
     def start(self) -> None:

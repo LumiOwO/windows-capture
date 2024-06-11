@@ -1,5 +1,11 @@
 # Windows Capture &emsp; [![Licence]][Licence URL] [![Build Status]][repository] [![Latest Version]][crates.io]
 
+---
+
+Add `hwnd` parameter to python api
+
+---
+
 [Licence]: https://img.shields.io/crates/l/windows-capture
 [Licence URL]: https://github.com/NiiightmareXD/windows-capture/blob/main/LICENCE
 
