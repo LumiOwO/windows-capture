@@ -2,7 +2,8 @@
 
 ---
 
-Add `hwnd` parameter to python api
+[20240920]: Add stacktrace print when exception
+[20240611]: Add `hwnd` parameter to python api
 
 ---
 

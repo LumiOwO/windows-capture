@@ -15,7 +15,115 @@ use ::windows_capture::{
     settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
     window::Window,
 };
-use pyo3::{exceptions::PyException, prelude::*, types::PyList};
+use pyo3::{exceptions::PyException, prelude::*, types::{PyList, PyModule}};
+
+macro_rules! handle_control_err {
+    ($e:expr, $msg:expr) => {
+        if let CaptureControlError::GraphicsCaptureApiError(
+            GraphicsCaptureApiError::FrameHandlerError(
+                InnerNativeWindowsCaptureError::PythonError(ref py_err),
+            ),
+        ) = $e
+        {
+            // Access Python stack trace
+            let formatted_traceback = Python::with_gil(|py| {
+                if let Some(traceback) = py_err.traceback_bound(py) {
+                    let traceback_module = PyModule::import_bound(py, "traceback")
+                        .expect("Failed to import traceback module");
+                    
+                    // Call format_tb to get a list of strings
+                    let formatted_traceback = traceback_module
+                        .getattr("format_tb")
+                        .expect("Failed to get format_tb function")
+                        .call1((traceback,))
+                        .expect("Failed to format traceback");
+
+                    // Since format_tb returns a list of strings, join them into one string
+                    let join = py
+                        .eval_bound("''.join", None, None)
+                        .expect("Failed to get ''.join function");
+
+                    let formatted_traceback: String = join
+                        .call1((formatted_traceback,))
+                        .expect("Failed to join traceback list into string")
+                        .extract()
+                        .expect("Failed to extract formatted traceback");
+
+                    formatted_traceback
+                } else {
+                    String::from("No traceback available")
+                }
+            });
+
+            return Err(PyException::new_err(format!(
+                "{msg}\n\nTraceback (most recent call last):\n{stacktrace}{e}",
+                msg = $msg,
+                stacktrace = formatted_traceback,
+                e = py_err
+            )));
+        }
+
+        return Err(PyException::new_err(format!(
+            "{msg} -> {e}",
+            msg = $msg,
+            e = $e
+        )));
+    };
+}
+
+
+macro_rules! handle_frame_err {
+    ($e:expr, $msg:expr) => {
+        if let GraphicsCaptureApiError::FrameHandlerError(
+            InnerNativeWindowsCaptureError::PythonError(ref py_err),
+        ) = $e
+        {
+            // Access Python stack trace
+            let formatted_traceback = Python::with_gil(|py| {
+                if let Some(traceback) = py_err.traceback_bound(py) {
+                    let traceback_module = PyModule::import_bound(py, "traceback")
+                        .expect("Failed to import traceback module");
+                    
+                    // Call format_tb to get a list of strings
+                    let formatted_traceback = traceback_module
+                        .getattr("format_tb")
+                        .expect("Failed to get format_tb function")
+                        .call1((traceback,))
+                        .expect("Failed to format traceback");
+
+                    // Since format_tb returns a list of strings, join them into one string
+                    let join = py
+                        .eval_bound("''.join", None, None)
+                        .expect("Failed to get ''.join function");
+
+                    let formatted_traceback: String = join
+                        .call1((formatted_traceback,))
+                        .expect("Failed to join traceback list into string")
+                        .extract()
+                        .expect("Failed to extract formatted traceback");
+
+                    formatted_traceback
+                } else {
+                    String::from("No traceback available")
+                }
+            });
+
+            return Err(PyException::new_err(format!(
+                "{msg}\n\nTraceback (most recent call last):\n{stacktrace}{e}",
+                msg = $msg,
+                stacktrace = formatted_traceback,
+                e = py_err
+            )));
+        }
+
+        return Err(PyException::new_err(format!(
+            "{msg} -> {e}",
+            msg = $msg,
+            e = $e
+        )));
+    };
+}
+
 
 /// Fastest Windows Screen Capture Library For Python 🔥.
 #[pymodule]
@@ -59,20 +167,7 @@ impl NativeCaptureControl {
                 match capture_control.wait() {
                     Ok(()) => (),
                     Err(e) => {
-                        if let CaptureControlError::GraphicsCaptureApiError(
-                            GraphicsCaptureApiError::FrameHandlerError(
-                                InnerNativeWindowsCaptureError::PythonError(ref e),
-                            ),
-                        ) = e
-                        {
-                            return Err(PyException::new_err(format!(
-                                "Failed To Join The Capture Thread -> {e}",
-                            )));
-                        }
-
-                        return Err(PyException::new_err(format!(
-                            "Failed To Join The Capture Thread -> {e}",
-                        )));
+                        handle_control_err!(e, "Failed To Join The Capture Thread");
                     }
                 };
             }
@@ -91,20 +186,7 @@ impl NativeCaptureControl {
                 match capture_control.stop() {
                     Ok(()) => (),
                     Err(e) => {
-                        if let CaptureControlError::GraphicsCaptureApiError(
-                            GraphicsCaptureApiError::FrameHandlerError(
-                                InnerNativeWindowsCaptureError::PythonError(ref e),
-                            ),
-                        ) = e
-                        {
-                            return Err(PyException::new_err(format!(
-                                "Failed To Stop The Capture Thread -> {e}",
-                            )));
-                        }
-
-                        return Err(PyException::new_err(format!(
-                            "Failed To Stop The Capture Thread -> {e}",
-                        )));
+                        handle_control_err!(e, "Failed To Stop The Capture Thread");
                     }
                 };
             }
@@ -192,18 +274,7 @@ impl NativeWindowsCapture {
             match InnerNativeWindowsCapture::start(settings) {
                 Ok(()) => (),
                 Err(e) => {
-                    if let GraphicsCaptureApiError::FrameHandlerError(
-                        InnerNativeWindowsCaptureError::PythonError(ref e),
-                    ) = e
-                    {
-                        return Err(PyException::new_err(format!(
-                            "Capture Session Threw An Exception -> {e}",
-                        )));
-                    }
-
-                    return Err(PyException::new_err(format!(
-                        "Capture Session Threw An Exception -> {e}",
-                    )));
+                    handle_frame_err!(e, "Capture Session Threw An Exception");
                 }
             }
         } else if self.window_name.is_some() {
@@ -230,18 +301,7 @@ impl NativeWindowsCapture {
             match InnerNativeWindowsCapture::start(settings) {
                 Ok(()) => (),
                 Err(e) => {
-                    if let GraphicsCaptureApiError::FrameHandlerError(
-                        InnerNativeWindowsCaptureError::PythonError(ref e),
-                    ) = e
-                    {
-                        return Err(PyException::new_err(format!(
-                            "Capture Session Threw An Exception -> {e}",
-                        )));
-                    }
-
-                    return Err(PyException::new_err(format!(
-                        "Capture Session Threw An Exception -> {e}",
-                    )));
+                    handle_frame_err!(e, "Capture Session Threw An Exception");
                 }
             }
         } else {
@@ -268,18 +328,7 @@ impl NativeWindowsCapture {
             match InnerNativeWindowsCapture::start(settings) {
                 Ok(()) => (),
                 Err(e) => {
-                    if let GraphicsCaptureApiError::FrameHandlerError(
-                        InnerNativeWindowsCaptureError::PythonError(ref e),
-                    ) = e
-                    {
-                        return Err(PyException::new_err(format!(
-                            "Capture Session Threw An Exception -> {e}",
-                        )));
-                    }
-
-                    return Err(PyException::new_err(format!(
-                        "Capture Session Threw An Exception -> {e}",
-                    )));
+                    handle_frame_err!(e, "Capture Session Threw An Exception");
                 }
             }
         };
@@ -313,18 +362,7 @@ impl NativeWindowsCapture {
             let capture_control = match InnerNativeWindowsCapture::start_free_threaded(settings) {
                 Ok(capture_control) => capture_control,
                 Err(e) => {
-                    if let GraphicsCaptureApiError::FrameHandlerError(
-                        InnerNativeWindowsCaptureError::PythonError(ref e),
-                    ) = e
-                    {
-                        return Err(PyException::new_err(format!(
-                            "Capture Session Threw An Exception -> {e}",
-                        )));
-                    }
-
-                    return Err(PyException::new_err(format!(
-                        "Capture Session Threw An Exception -> {e}",
-                    )));
+                    handle_frame_err!(e, "Capture Session Threw An Exception");
                 }
             };
 
@@ -353,18 +391,7 @@ impl NativeWindowsCapture {
             let capture_control = match InnerNativeWindowsCapture::start_free_threaded(settings) {
                 Ok(capture_control) => capture_control,
                 Err(e) => {
-                    if let GraphicsCaptureApiError::FrameHandlerError(
-                        InnerNativeWindowsCaptureError::PythonError(ref e),
-                    ) = e
-                    {
-                        return Err(PyException::new_err(format!(
-                            "Capture Session Threw An Exception -> {e}",
-                        )));
-                    }
-
-                    return Err(PyException::new_err(format!(
-                        "Capture Session Threw An Exception -> {e}",
-                    )));
+                    handle_frame_err!(e, "Capture Session Threw An Exception");
                 }
             };
 
